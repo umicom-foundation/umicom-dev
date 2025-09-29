@@ -1,4 +1,15 @@
-﻿# Studio FIM Design (Umicom Studio IDE)
+﻿# =============================================================================
+#  Umicom Dev Tools - {FILENAME}
+#  Project: Umicom AuthorEngine AI / Workspace Utilities
+#  Purpose: Keep credits & licensing visible in every file.
+#  
+#  © 2025 Umicom Foundation - License: MIT
+
+#  Credits: Umicom Foundation engineering. 
+#  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
+# =============================================================================
+
+# Studio FIM Design (Umicom Studio IDE)
 
 **Objective:** Provide fast *Fill-In-the-Middle* (infill) completions in the editor.
 

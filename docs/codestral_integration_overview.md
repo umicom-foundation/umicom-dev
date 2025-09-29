@@ -1,4 +1,15 @@
-﻿# Codestral Integration Overview
+﻿# =============================================================================
+#  Umicom Dev Tools - {FILENAME}
+#  Project: Umicom AuthorEngine AI / Workspace Utilities
+#  Purpose: Keep credits & licensing visible in every file.
+#  
+#  © 2025 Umicom Foundation - License: MIT
+
+#  Credits: Umicom Foundation engineering. 
+#  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
+# =============================================================================
+
+# Codestral Integration Overview
 
 **Goal:** Add Mistral AI (Codestral) to Umicom projects for both *editor infill* (FIM) and *chat-style completions*.
 

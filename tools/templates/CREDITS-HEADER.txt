@@ -4,6 +4,6 @@
  Purpose: Keep credits & licensing visible in every file.
  
  © {YEAR} Umicom Foundation — License: MIT
- Credits: Umicom Foundation engineering. AI tooling assistance: GPT-5 Thinking.
+ Credits: Umicom Foundation engineering. 
  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
 =============================================================================

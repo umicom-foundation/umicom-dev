@@ -1,4 +1,15 @@
-﻿# UAEngine Mistral Backend Design
+﻿# =============================================================================
+#  Umicom Dev Tools - {FILENAME}
+#  Project: Umicom AuthorEngine AI / Workspace Utilities
+#  Purpose: Keep credits & licensing visible in every file.
+#  
+#  © 2025 Umicom Foundation - License: MIT
+
+#  Credits: Umicom Foundation engineering. 
+#  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
+# =============================================================================
+
+# UAEngine Mistral Backend Design
 
 **Objective:** Plug a Mistral-backed LLM into UAEngineâ€™s tiny LLM faÃ§ade without breaking other providers.
 

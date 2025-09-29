@@ -12,7 +12,7 @@
   { "slug": "umicoin", "name": "umicoin", "desc": "Umi Coin cryptocurrency (token, wallets, explorer).", "private": false },
   { "slug": "umicom-common", "name": "umicom-common", "desc": "Shared schemas/tools/CI/templates.", "private": false },
   { "slug": "umicom-bank", "name": "umicom-bank", "desc": "Umicom Bank (desktop/mobile/web, UMI + fiat).", "private": false },
-  { "slug": "umicom-fundme", "name": "umicom-fundme", "desc": "UFundMe â€” crowdfunding platform.", "private": false },
+  { "slug": "umicom-fundme", "name": "umicom-fundme", "desc": "UFundMe - crowdfunding platform.", "private": false },
   { "slug": "calypso-dev-examples", "name": "calypso-dev-examples", "desc": "Calypso examples & extensions (Java/C/C++/Kotlin).", "private": false },
   { "slug": "umicom-llm", "name": "umicom-llm", "desc": "Umicom LLM (training/eval/fine-tuning).", "private": false },
   { "slug": "umicom-c-webserver", "name": "umicom-c-webserver", "desc": "Distributed C/ASM web server.", "private": false },

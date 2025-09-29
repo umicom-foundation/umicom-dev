@@ -1,5 +1,17 @@
+﻿<#
+=============================================================================
+ Umicom Dev Tools - {FILENAME}
+ Project: Umicom AuthorEngine AI / Workspace Utilities
+ Purpose: Keep credits & licensing visible in every file.
+ 
+ Â© {YEAR} Umicom Foundation - License: MIT
+ Credits: Umicom Foundation engineering. 
+ NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
+=============================================================================
+#>
+
 <# =======================================================================
- Umicom Tools — Credits Banner Enforcer
+ Umicom Tools - Credits Banner Enforcer
  Maintainer: Umicom Foundation
 Author: Sammy Hegab
   License: MIT
@@ -153,7 +165,7 @@ foreach ($f in $files) {
   }
 
   if ($Apply) {
-    # Write UTF-8 without BOM (PS7 default) — consistent and friendly for Git
+    # Write UTF-8 without BOM (PS7 default) - consistent and friendly for Git
     Set-Content -LiteralPath $path -Value $newText -NoNewline -Encoding utf8
     Write-Host "[ADD] $path"
   } else {
