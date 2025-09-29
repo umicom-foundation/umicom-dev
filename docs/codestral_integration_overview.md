@@ -1,4 +1,4 @@
-# Codestral Integration Overview
+﻿# Codestral Integration Overview
 
 **Goal:** Add Mistral AI (Codestral) to Umicom projects for both *editor infill* (FIM) and *chat-style completions*.
 

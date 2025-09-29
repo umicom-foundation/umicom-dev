@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 : "${MISTRAL_API_KEY:?Set MISTRAL_API_KEY environment variable}"
 base="${UENG_MISTRAL_BASE_URL:-https://api.mistral.ai}"

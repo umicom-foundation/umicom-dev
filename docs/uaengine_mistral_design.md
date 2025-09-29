@@ -1,6 +1,6 @@
-# UAEngine Mistral Backend Design
+﻿# UAEngine Mistral Backend Design
 
-**Objective:** Plug a Mistral-backed LLM into UAEngine’s tiny LLM façade without breaking other providers.
+**Objective:** Plug a Mistral-backed LLM into UAEngineâ€™s tiny LLM faÃ§ade without breaking other providers.
 
 ### Interface (existing)
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 SCHEMA="third_party/api-schemas/mistral/openapi.yaml"
 OUT="clients/mistral-cpp"

@@ -1,4 +1,4 @@
-# never commit secrets
+﻿# never commit secrets
 .env.local
 *.bak
 build/

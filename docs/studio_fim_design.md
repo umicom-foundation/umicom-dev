@@ -1,4 +1,4 @@
-# Studio FIM Design (Umicom Studio IDE)
+﻿# Studio FIM Design (Umicom Studio IDE)
 
 **Objective:** Provide fast *Fill-In-the-Middle* (infill) completions in the editor.
 

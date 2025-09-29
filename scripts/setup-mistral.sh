@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <MISTRAL_API_KEY>" >&2

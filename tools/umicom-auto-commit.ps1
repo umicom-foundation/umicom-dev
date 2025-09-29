@@ -1,18 +1,18 @@
-<# =================================================================================================
+﻿<# =================================================================================================
   Umicom Auto-Commit Watcher
-  Author: Sammy Hegab (Umicom Foundation) — with AI co-pilot “Sarah”
+  Author: Sammy Hegab (Umicom Foundation) â€” with AI co-pilot â€œSarahâ€
   Licence: MIT
 
   PURPOSE
   -------
-  • Watch all project folders listed in projects.json under C:\dev\<slug>.
-  • On file changes, debounce, then: git add -A ; git commit ; git push origin main.
-  • Excludes typical build artefacts (build/out/dist/node_modules, etc).
+  â€¢ Watch all project folders listed in projects.json under C:\dev\<slug>.
+  â€¢ On file changes, debounce, then: git add -A ; git commit ; git push origin main.
+  â€¢ Excludes typical build artefacts (build/out/dist/node_modules, etc).
 
   NOTE
   ----
-  • This is optional. Use it when you want automatic commits while multitasking.
-  • Commit messages are timestamped. You can still make handcrafted commits anytime.
+  â€¢ This is optional. Use it when you want automatic commits while multitasking.
+  â€¢ Commit messages are timestamped. You can still make handcrafted commits anytime.
 ================================================================================================= #>
 
 param(
@@ -37,7 +37,7 @@ function Start-Commit {
 
   git add -A
   $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-  git commit -m "chore: autosave ($ts) — main-only policy"
+  git commit -m "chore: autosave ($ts) â€” main-only policy"
   git push origin main
   Pop-Location
 }

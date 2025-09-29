@@ -1,14 +1,14 @@
-# Umicom × Codestral (Mistral AI) — Integration Pack
+﻿# Umicom Ã— Codestral (Mistral AI) â€” Integration Pack
 Date: 2025-09-28
 
 This bundle adds **Codestral** support across your Umicom repos with secure key handling, C/CMake code, test scripts, and detailed documentation.
 
 Repos covered:
 - **umicom-authorengine-ai** (UAEngine CLI): add a **Mistral backend** (`llm_mistral.c`) using the Chat Completions API.
-- **umicom-studio-ide**: provide a minimal **FIM (Fill‑In‑the‑Middle)** integration (`studio_codestral_fim.c`) designed for editor autocomplete/infill.
+- **umicom-studio-ide**: provide a minimal **FIM (Fillâ€‘Inâ€‘theâ€‘Middle)** integration (`studio_codestral_fim.c`) designed for editor autocomplete/infill.
 - Common scripts for environment setup and quick cURL-based tests.
 
-> Keys are **never** committed. Use `MISTRAL_API_KEY` in your shell environment or `.env.local` (git‑ignored).
+> Keys are **never** committed. Use `MISTRAL_API_KEY` in your shell environment or `.env.local` (gitâ€‘ignored).
 
 ## Quick Start
 
@@ -50,18 +50,18 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ```
 
-See repo‑specific READMEs inside each folder for details.
+See repoâ€‘specific READMEs inside each folder for details.
 
 
 ---
 
 ## OpenAPI Schema (Mistral)
 
-- `third_party/api-schemas/mistral/openapi.yaml` — the API contract used for docs and codegen.
+- `third_party/api-schemas/mistral/openapi.yaml` â€” the API contract used for docs and codegen.
 - Local viewers: open `umicom-authorengine-ai/docs/api/mistral/index.html` or `umicom-studio-ide/docs/api/mistral/index.html`.
 - Sync script: `./scripts/sync-mistral-schema.sh` (or `.ps1`).
 - Codegen scripts (optional):  
   - `./scripts/generate/openapi_codegen_c.sh` / `.ps1`  
   - `./scripts/generate/openapi_codegen_cpp.sh` / `.ps1`
 
-> Codegen is optional — our hand-written `libcurl` backends (Chat + FIM) are already included and heavily commented.
+> Codegen is optional â€” our hand-written `libcurl` backends (Chat + FIM) are already included and heavily commented.

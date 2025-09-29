@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 SRC="third_party/api-schemas/mistral/openapi.yaml"
 AE="umicom-authorengine-ai/docs/api/mistral"

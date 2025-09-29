@@ -1,4 +1,4 @@
-Param(
+﻿Param(
   [Parameter(Mandatory=$true)][string]$Key
 )
 setx MISTRAL_API_KEY $Key | Out-Null

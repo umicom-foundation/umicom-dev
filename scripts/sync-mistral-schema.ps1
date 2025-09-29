@@ -1,4 +1,4 @@
-Param(
+﻿Param(
   [string]$Source = "third_party/api-schemas/mistral/openapi.yaml"
 )
 if (!(Test-Path $Source)) { Write-Error "Spec not found: $Source"; exit 1 }

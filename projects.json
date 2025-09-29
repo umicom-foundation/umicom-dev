@@ -1,4 +1,4 @@
-[
+﻿[
   { "slug": "umicom-authorengine-ai", "name": "Umicom AuthorEngine AI", "desc": "Authoring engine (CLI/lib): init/ingest/build/export/serve.", "private": false },
   { "slug": "umicom-studio-ide", "name": "Umicom Studio IDE", "desc": "GTK4 IDE integrating libuaengine; task runner; UMICC one-click run.", "private": false },
   { "slug": "umicc", "name": "UMICC", "desc": "Umicom Compiler (C/ASM first), pluggable front-ends.", "private": false },
@@ -12,7 +12,7 @@
   { "slug": "umicoin", "name": "umicoin", "desc": "Umi Coin cryptocurrency (token, wallets, explorer).", "private": false },
   { "slug": "umicom-common", "name": "umicom-common", "desc": "Shared schemas/tools/CI/templates.", "private": false },
   { "slug": "umicom-bank", "name": "umicom-bank", "desc": "Umicom Bank (desktop/mobile/web, UMI + fiat).", "private": false },
-  { "slug": "umicom-fundme", "name": "umicom-fundme", "desc": "UFundMe — crowdfunding platform.", "private": false },
+  { "slug": "umicom-fundme", "name": "umicom-fundme", "desc": "UFundMe â€” crowdfunding platform.", "private": false },
   { "slug": "calypso-dev-examples", "name": "calypso-dev-examples", "desc": "Calypso examples & extensions (Java/C/C++/Kotlin).", "private": false },
   { "slug": "umicom-llm", "name": "umicom-llm", "desc": "Umicom LLM (training/eval/fine-tuning).", "private": false },
   { "slug": "umicom-c-webserver", "name": "umicom-c-webserver", "desc": "Distributed C/ASM web server.", "private": false },
@@ -21,7 +21,7 @@
   { "slug": "sammyhegab-personnel-website", "name": "SammyHegab-Personnel-Website", "desc": "Portfolio online CV of Sammy Hegab.", "private": false },
   { "slug": "custommadeglass-website", "name": "Custom Made Glass Website", "desc": "Rebuild custommadeglass.co.uk (C/C++), ref supertuff.co.uk.", "private": false },
   { "slug": "umicom-enhanced-c", "name": "Umicom-Enhanced-C Language", "desc": "Enhanced C: safety, portability, cross-language, JIT/interpreter.", "private": false },
-  { "slug": "umicom-medical-patient-records", "name": "Umicom Medical Patient Record System", "desc": "Physiotherapy tracker; AR↔EN translation; records upload.", "private": false },
+  { "slug": "umicom-medical-patient-records", "name": "Umicom Medical Patient Record System", "desc": "Physiotherapy tracker; ARâ†”EN translation; records upload.", "private": false },
   { "slug": "umicom-weight-loss-tracker", "name": "Umicom Weight Loss Challenge Tracker", "desc": "Mobile/Web: calories, photos, weights, 100-day leaderboard.", "private": false },
   { "slug": "umicom-os", "name": "Umicom OS", "desc": "OS for Umicom apps (desktop/server/barebone; x86/ARM/RISC-V).", "private": false },
   { "slug": "umicom-framework", "name": "Umicom Framework", "desc": "Rapid application framework (PHP/Java/C/UAI).", "private": false },

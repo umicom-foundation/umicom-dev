@@ -1,4 +1,4 @@
-# Mistral / Codestral OpenAPI Schema
+﻿# Mistral / Codestral OpenAPI Schema
 
 This folder mirrors the official Mistral API spec for local docs, validation, and client code generation.
 

@@ -1,6 +1,6 @@
-# Credits
+﻿# Credits
 
-- **Umicom Foundation** — https://umicom.foundation/
+- **Umicom Foundation** â€” https://umicom.foundation/
 - **GitHub (Org):** https://github.com/umicom-foundation/
 - **GitHub (Sammy Hegab):** https://github.com/sammyhegab
 - **LinkedIn:** https://www.linkedin.com/in/sammyhegab/
