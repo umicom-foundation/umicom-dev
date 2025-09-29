@@ -1,0 +1,17 @@
+# never commit secrets
+.env.local
+*.bak
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+*.user
+*.suo
+*.exe
+*.dll
+*.pdb
+*.obj
+*.o
+*.a
+*.lib
+*.log

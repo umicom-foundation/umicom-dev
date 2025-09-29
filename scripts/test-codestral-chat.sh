@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${MISTRAL_API_KEY:?Set MISTRAL_API_KEY environment variable}"
+base="${UENG_MISTRAL_BASE_URL:-https://api.mistral.ai}"
+curl -sS "${base}/v1/chat/completions"       -H "Authorization: Bearer ${MISTRAL_API_KEY}"       -H "Content-Type: application/json"       -d '{"model":"mistral-small-latest","messages":[{"role":"user","content":"Say hello from Umicom."}],"max_tokens":64,"temperature":0.2}'
+echo
