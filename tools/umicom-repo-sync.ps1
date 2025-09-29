@@ -10,16 +10,11 @@
  - If local repo has no commits: create skeleton (README, LICENSE, .gitignore, .gitattributes, src\main.c),
    commit to MAIN, push, set upstream.
  - Idempotent: safe to re-run; skips what already exists.
- - Optional: after sync, prompt to run a one-time auto-commit sweep that stages/commits/pushes any
-   pending changes across all local repos to main.
+ - Optional: one-time auto-commit sweep across all local repos.
 
  HOUSE RULES
- - Always commit directly to "main" (no feature branches).
- - Include heavy, descriptive comments and credit headers in all files/scripts.
-
- REQUIREMENTS
- - Git + GitHub CLI (gh). Run once: gh auth login
- - Allow scripts: Set-ExecutionPolicy -Scope Process Bypass
+ - Always commit directly to "main".
+ - Use heavy, descriptive comments in all files/scripts.
  =============================================================================================== #>
 
 [CmdletBinding()]
@@ -46,7 +41,7 @@ if (-not (Test-Path $Root)) { New-Item -ItemType Directory -Path $Root | Out-Nul
 $projects = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 if (-not $projects) { throw "No projects found in $ConfigFile" }
 
-# Helper: skeleton writer (README, LICENSE, .gitignore, .gitattributes, src\main.c)
+# Helper: write skeleton files into a new repo dir
 function New-UmicomSkeleton {
   param([string]$Path, [string]$Name, [string]$Desc)
 
@@ -88,7 +83,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to do so, subject to the following conditions:
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -111,7 +107,6 @@ cmake-build-*/
 '@
   Set-Content -Path .gitignore -Value $gitignore -Encoding UTF8
 
-  # Line ending normalization to avoid CRLF/LF noise across platforms
   $gitattributes = @'
 *               text=auto
 *.c             text eol=lf
@@ -153,14 +148,14 @@ int main(void) {
   Pop-Location
 }
 
-# Helper: remote repo existence
+# Helper: remote existence
 function Test-RepoExists {
   param([string]$Org, [string]$Slug)
   & gh repo view "$Org/$Slug" --json name 1>$null 2>$null
   return ($LASTEXITCODE -eq 0)
 }
 
-# Helper: create remote repo with README so main exists
+# Helper: create remote with README so main exists immediately
 function New-RemoteRepo {
   param([string]$Org, [string]$Slug, [string]$Name, [string]$Desc, [bool]$IsPrivate)
 
@@ -184,9 +179,7 @@ $plan = foreach ($p in $projects) {
   $localPath = Join-Path $Root $slug
   $remoteExists = Test-RepoExists -Org $Org -Slug $slug
   $localExists  = Test-Path $localPath
-  [pscustomobject]@{
-    Slug=$slug; Name=$name; RemoteExists=$remoteExists; LocalExists=$localExists; Private=$isPrivate
-  }
+  [pscustomobject]@{ Slug=$slug; Name=$name; RemoteExists=$remoteExists; LocalExists=$localExists; Private=$isPrivate }
 }
 
 Write-Host ""
@@ -198,10 +191,7 @@ foreach ($row in $plan) {
   Write-Host (" - {0} :: {1}" -f $row.Slug, ($tags -join ", "))
 }
 
-if ($DryRun) {
-  Write-Host "`nDry run: exiting without changes." -ForegroundColor Yellow
-  exit 0
-}
+if ($DryRun) { Write-Host "`nDry run: exiting without changes." -ForegroundColor Yellow; exit 0 }
 
 # Execute
 foreach ($p in $projects) {
@@ -224,7 +214,7 @@ foreach ($p in $projects) {
     Write-Host "Cloning to $localPath ..." -ForegroundColor Yellow
     & gh repo clone "$Org/$slug" "$localPath" 1>$null
     if ($LASTEXITCODE -ne 0) {
-      Write-Host "Clone failed (network or empty remote). Initialising locally..." -ForegroundColor Yellow
+      Write-Host "Clone failed. Initialising locally..." -ForegroundColor Yellow
       New-Item -ItemType Directory -Path $localPath -Force | Out-Null
       Push-Location $localPath
       git init | Out-Null
@@ -274,7 +264,6 @@ Write-Host "`nSync done. Main-only policy respected." -ForegroundColor Cyan
 $reply = Read-Host "Run auto-commit sweep now? (y/N)"
 if ($reply -match "^(y|Y)$") {
   Write-Host "Auto-commit sweep started..." -ForegroundColor Cyan
-
   foreach ($p in $projects) {
     $localPath = Join-Path $Root $p.slug
     if (-not (Test-Path $localPath)) { continue }
@@ -296,23 +285,15 @@ if ($reply -match "^(y|Y)$") {
       $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
       git commit -m "chore: autosave ($ts) - main-only policy"
       $hasRemote = git remote 2>$null
-      if (-not $hasRemote) {
-        git remote add origin "https://github.com/$Org/$($p.slug).git"
-      }
+      if (-not $hasRemote) { git remote add origin "https://github.com/$Org/$($p.slug).git" }
       git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 1>$null 2>$null
-      if ($LASTEXITCODE -ne 0) {
-        git push -u origin main
-      } else {
-        git push origin main
-      }
+      if ($LASTEXITCODE -ne 0) { git push -u origin main } else { git push origin main }
       Write-Host (" - Committed and pushed changes in {0}" -f $p.slug) -ForegroundColor Green
     } else {
       Write-Host (" - No changes in {0}" -f $p.slug)
     }
-
     Pop-Location
   }
-
   Write-Host "Auto-commit sweep complete." -ForegroundColor Cyan
 } else {
   Write-Host "Skipped auto-commit sweep." -ForegroundColor Yellow
@@ -320,3 +301,4 @@ if ($reply -match "^(y|Y)$") {
 
 Write-Host "Umicom Repo Sync - finished."
 # =========================================================================================
+# End of file

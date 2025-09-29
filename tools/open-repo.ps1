@@ -8,11 +8,6 @@
    * code      -> VS Code (default)
    * devenv    -> Visual Studio (opens .sln if found; else folder)
    * explorer  -> File Explorer
-
- USAGE
-   .\open-repo.ps1 -Slug umicom-studio-ide
-   .\open-repo.ps1 -Slug umicom-studio-ide -Editor devenv
-   .\open-repo.ps1 -Slug umicom-studio-ide -Editor explorer
  =============================================================================================== #>
 
 [CmdletBinding()]
@@ -28,19 +23,12 @@ $path = Join-Path $Root $Slug
 if (-not (Test-Path $path)) { throw "Repo folder not found: $path" }
 
 switch ($Editor) {
-  "code" {
-    Start-Process code -ArgumentList @("-n", $path)
-  }
-  "devenv" {
-    # Try to find a solution; fallback to opening the folder
+  "code"     { Start-Process code -ArgumentList @("-n", $path) }
+  "devenv"   {
     $sln = Get-ChildItem -Path $path -Recurse -Filter *.sln -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($sln) {
-      Start-Process devenv $sln.FullName
-    } else {
-      Start-Process devenv $path
-    }
+    if ($sln) { Start-Process devenv $sln.FullName } else { Start-Process devenv $path }
   }
-  "explorer" {
-    Start-Process explorer $path
-  }
+  "explorer" { Start-Process explorer $path }
 }
+# =========================================================================================
+# End of file
