@@ -1,110 +1,170 @@
-#requires -Version 5.1
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+<# =======================================================================
+ Umicom Tools — Credits Banner Enforcer
+ Maintainer: Umicom Foundation
+Author: Sammy Hegab
+  License: MIT
+  WHAT THIS DOES 
+ - Scans a tree and inserts a standard credits banner from a template
+   into source files that are missing one.
+ - Safe by default (dry-run). Use -Apply to write changes.
+ - Compatible with Windows PowerShell 5.x and PowerShell 7+
 
-<#
-.SYNOPSIS
-  enforce-credits.ps1 — Ensure every script/source file under a root contains the Umicom credit banner.
+ Usage examples:
+   .\tools\enforce-credits.ps1 -Root C:\dev\umicom-dev -DryRun
+   .\tools\enforce-credits.ps1 -Root C:\dev\umicom-dev -Apply -Verbose
+======================================================================= #>
 
-.DESCRIPTION
-  * Reads a header template (tools\templates\CREDITS-HEADER.txt by default).
-  * Injects the banner at the top of files that don't already contain a recognizable "Credits" header.
-  * Only touches known-safe text formats (PowerShell, C/C++, headers, Python, shell, Markdown).
-  * Defaults to Dry-Run; add -Apply to write changes.
-
-.NOTES
-  © 2025 Umicom Foundation — All rights reserved.
-  Keep this header in all scripts / sources. Do not remove credits.
-
-.PARAMETER Root
-  The root folder to scan (e.g., C:\\dev\\umicom-dev\\tools). Defaults to current directory.
-
-.PARAMETER Template
-  Path to the header template. Tokens supported: {FILENAME} and {YEAR}.
-
-.PARAMETER Apply
-  Actually write changes. (Default is a dry-run with a report).
-
-.EXAMPLE
-  .\\enforce-credits.ps1 -Root C:\\dev\\umicom-dev\\tools -Apply
-
-.EXAMPLE
-  .\\enforce-credits.ps1 -Root C:\\dev\\umicom-dev\\tools -Template .\\templates\\CREDITS-HEADER.txt -Apply
-#>
-
+[CmdletBinding()]
 param(
-  [string]$Root = (Get-Location).Path,
-  [string]$Template = "$(Split-Path -Parent $PSCommandPath)\\templates\\CREDITS-HEADER.txt",
-  [switch]$Apply
+  [Parameter(Mandatory=$true)]
+  [string]$Root,
+
+  [string]$Template = "$PSScriptRoot\templates\CREDITS-HEADER.txt",
+
+  # Write changes; otherwise just report (dry-run)
+  [switch]$Apply,
+
+  # File globs to include
+  [string[]]$Include = @(
+    '*.ps1','*.psm1','*.psd1','*.psd1',
+    '*.c','*.h','*.cpp','*.hpp',
+    '*.cs','*.java','*.go','*.rs','*.php',
+    '*.js','*.ts','*.tsx','*.jsx','*.css','*.scss',
+    '*.py','*.rb','*.sh','*.pl',
+    '*.ini','*.toml','*.yml','*.yaml',
+    '*.sql','*.md','*.xml','*.html'
+  ),
+
+  # Folder names to skip anywhere in the path
+  [string[]]$ExcludeDirs = @(
+    '.git','.github','.vs','.vscode',
+    'bin','obj','build','out','dist','node_modules',
+    'packages','coverage','artifacts','third_party','vendor','external'
+  )
 )
 
-function Get-CommentWrappedHeader($ext, $body) {
-  switch ($ext.ToLowerInvariant()) {
-    ".ps1" { return ($body -split "`n" | ForEach-Object { '# ' + $_ }) -join "`r`n" }
-    ".psm1" { return ($body -split "`n" | ForEach-Object { '# ' + $_ }) -join "`r`n" }
-    ".psd1" { return ($body -split "`n" | ForEach-Object { '# ' + $_ }) -join "`r`n" }
-    ".py"  { return ($body -split "`n" | ForEach-Object { '# ' + $_ }) -join "`r`n" }
-    ".sh"  { return ($body -split "`n" | ForEach-Object { '# ' + $_ }) -join "`r`n" }
-    ".c"   { return "/*`r`n$body`r`n*/" }
-    ".h"   { return "/*`r`n$body`r`n*/" }
-    ".cpp" { return "/*`r`n$body`r`n*/" }
-    ".hpp" { return "/*`r`n$body`r`n*/" }
-    ".md"  { return "<!--`r`n" + $body + "`r`n-->" }
-    default { return $null }
+# ---- helpers -------------------------------------------------------------
+
+function Get-NewLine {
+  param([string]$text)
+  if ($text -match "`r`n") { return "`r`n" }
+  if ($text -match "`n")   { return "`n" }
+  return "`r`n"
+}
+
+function Get-TemplateText {
+  param([string]$Template)
+  if (-not (Test-Path -LiteralPath $Template)) {
+    throw "Template not found: $Template"
+  }
+  return (Get-Content -LiteralPath $Template -Raw)
+}
+
+function Wrap-Header {
+  param(
+    [string]$Ext,
+    [string]$Body,
+    [string]$nl
+  )
+  $ext = $Ext.ToLowerInvariant()
+
+  # choose comment style
+  if ($ext -in @('.ps1','.psm1','.psd1')) {
+    return '<#' + $nl + $Body.TrimEnd() + $nl + '#>'
+  }
+  elseif ($ext -in @('.c','.h','.cpp','.hpp','.cs','.java','.go','.rs','.php','.js','.ts','.tsx','.jsx','.css','.scss','.sql','.xml','.html')) {
+    return '/*' + $nl + $Body.TrimEnd() + $nl + '*/'
+  }
+  else {
+    # default to line comments (e.g. .py, .sh, .yml, .toml, .md)
+    $pref = ($Body -split "`r?`n") | ForEach-Object { '# ' + $_ }
+    return ($pref -join $nl)
   }
 }
 
-$rootPath = (Resolve-Path -LiteralPath $Root).Path
-
-if (-not (Test-Path -LiteralPath $Template)) {
-  throw "Header template not found: $Template"
-}
-$tpl = Get-Content -LiteralPath $Template -Raw -Encoding UTF8
-
-$extensions = @(".ps1",".psm1",".psd1",".c",".h",".cpp",".hpp",".py",".sh",".md")
-$skipDirs   = @(".git","build","build-vs","bin","obj",".cache",".vscode",".vs")
-
-$files = Get-ChildItem -LiteralPath $rootPath -Recurse -File |
-  Where-Object {
-    $extOk = $extensions -contains $_.Extension.ToLowerInvariant()
-    $inSkip = $false
-    $p = $_.DirectoryName
-    foreach ($s in $skipDirs) { if ($p -like "*\0\*" -f $s) { $inSkip=$true; break } }
-    return $extOk -and (-not $inSkip)
+function First-NonEmptyLine {
+  param([string]$text)
+  foreach ($line in ($text -split "`r?`n")) {
+    $t = $line.Trim()
+    if ($t.Length -gt 0) { return $t }
   }
+  return ""
+}
 
-$changed = 0
+function Has-Header {
+  param(
+    [string]$FileText,
+    [string]$Signature
+  )
+  $head = if ($FileText.Length -gt 4000) { $FileText.Substring(0,4000) } else { $FileText }
+  return ($head.ToLowerInvariant().Contains($Signature.ToLowerInvariant()))
+}
+
+function Find-InsertionIndex {
+  param([string]$text)
+  # keep shebangs or XML prolog on first line
+  if ($text -match '^(#!.*?)(\r?\n)')     { return $Matches[0].Length }
+  if ($text -match '^(<\?xml.*?\?>)(\r?\n)') { return $Matches[0].Length }
+  return 0
+}
+
+# ---- gather files --------------------------------------------------------
+
+if (-not (Test-Path -LiteralPath $Root)) { throw "Root not found: $Root" }
+$tpl      = Get-TemplateText -Template $Template
+$signature = First-NonEmptyLine -text $tpl
+
+# Build file list respecting Include globs
+$files = @()
+foreach ($pattern in $Include) {
+  $files += Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue
+}
+# Remove excluded directories
+$exRegex = [regex]::Escape(($ExcludeDirs -join '|')) -replace '\\\|','|'
+$files = $files | Where-Object { $_.DirectoryName -notmatch "(^|\\)($exRegex)(\\|$)" }
+
+$added = 0
+$skipped = 0
+
 foreach ($f in $files) {
-  $text = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8
-  if ($text -match '(?im)^\s*(#|\/\*|<!--).*(credits|umicom).*(\*\/|-->)?') {
-    Write-Host "[ok]    $($f.FullName) — credits present"
+  $path = $f.FullName
+  $text = Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue
+  if ($null -eq $text) { Write-Verbose "Skip (unreadable): $path"; $skipped++; continue }
+
+  if (Has-Header -FileText $text -Signature $signature) {
+    Write-Verbose "OK (has header): $path"
+    $skipped++
     continue
   }
 
-  $headerBody = $tpl.Replace("{FILENAME}", $f.Name).Replace("{YEAR}", "2025")
-  $wrapped = Get-CommentWrappedHeader $f.Extension $headerBody
-  if (-not $wrapped) {
-    Write-Host "[skip]  $($f.FullName) — unsupported extension '$($f.Extension)'"
-    continue
-  }
+  $nl        = Get-NewLine -text $text
+  $wrapped   = Wrap-Header -Ext $f.Extension -Body $tpl -nl $nl
+  $insertion = Find-InsertionIndex -text $text
 
-  # Keep shebangs safe; insert after a shebang if present
-  $insertion = 0
-  if ($text -match '^(#!.*)') { $insertion = ($Matches[0].Length) }
-
-  $newText = ($text.Length -gt 0) ? ($text.Insert($insertion, ($insertion -gt 0 ? "`r`n" : "") + $wrapped + "`r`n`r`n")) : ($wrapped + "`r`n")
-  if ($Apply) {
-    Set-Content -LiteralPath $f.FullName -Value $newText -Encoding UTF8
-    Write-Host "[fixed] $($f.FullName) — header inserted"
-    $changed++
+  # cross-version friendly (no ternary operators)
+  if ($text.Length -gt 0) {
+    $prefix = ""
+    if ($insertion -gt 0) { $prefix = $nl }
+    $before = if ($insertion -gt 0) { $text.Substring(0,$insertion) } else { "" }
+    $after  = $text.Substring($insertion)
+    $newText = $before + $prefix + $wrapped + $nl + $nl + $after
   } else {
-    Write-Host "[would] $($f.FullName) — would insert header"
+    $newText = $wrapped + $nl + $nl
   }
+
+  if ($Apply) {
+    # Write UTF-8 without BOM (PS7 default) — consistent and friendly for Git
+    Set-Content -LiteralPath $path -Value $newText -NoNewline -Encoding utf8
+    Write-Host "[ADD] $path"
+  } else {
+    Write-Host "[WOULD ADD] $path"
+  }
+  $added++
 }
 
+Write-Host ""
 if ($Apply) {
-  Write-Host "Done. Files changed: $changed"
+  Write-Host "Inserted header into $added file(s). Skipped $skipped file(s)."
 } else {
-  Write-Host "Dry-run complete. Files that would change: $changed"
-  Write-Host "Re-run with -Apply to write changes."
+  Write-Host "Dry-run: would insert header into $added file(s). Skipped $skipped file(s). Use -Apply to write."
 }
