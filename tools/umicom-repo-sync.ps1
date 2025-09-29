@@ -1,20 +1,21 @@
 <# ===============================================================================================
  Umicom Repo Sync (PowerShell)
- Author: Sammy Hegab (Umicom Foundation) — with AI co-pilot "Sarah"
+ Author: Sammy Hegab (Umicom Foundation)
  Licence: MIT. (c) 2025 Umicom Foundation.
 
  PURPOSE
- - Read C:\dev\projects.json (slug, name, desc, private).
+ - Read projects.json (slug, name, desc, private).
  - Ensure each repo exists on GitHub (org "umicom-foundation") with README (so main exists).
  - Ensure each repo exists locally under C:\dev\<slug>.
- - If local repo has no commits: create skeleton, commit to MAIN, push.
+ - If local repo has no commits: create skeleton (README, LICENSE, .gitignore, .gitattributes, src\main.c),
+   commit to MAIN, push, set upstream.
  - Idempotent: safe to re-run; skips what already exists.
- - Optional: after sync, prompt to run a one-time "auto-commit sweep" that stages/commits/pushes
-   any pending changes across all local repos to the main branch.
+ - Optional: after sync, prompt to run a one-time auto-commit sweep that stages/commits/pushes any
+   pending changes across all local repos to main.
 
  HOUSE RULES
  - Always commit directly to "main" (no feature branches).
- - Always include heavy, descriptive comments and credit headers in all files/scripts.
+ - Include heavy, descriptive comments and credit headers in all files/scripts.
 
  REQUIREMENTS
  - Git + GitHub CLI (gh). Run once: gh auth login
@@ -33,7 +34,7 @@ param(
 
 Write-Host "Umicom Repo Sync - starting..." -ForegroundColor Cyan
 
-# --- Environment checks -------------------------------------------------------------------------
+# Environment checks
 if (-not (Test-Path $ConfigFile)) { throw "Config file not found: $ConfigFile" }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Git is not installed or not on PATH." }
 if (-not (Get-Command gh  -ErrorAction SilentlyContinue)) { throw "GitHub CLI (gh) is not installed or not on PATH." }
@@ -41,11 +42,11 @@ if (-not (Get-Command gh  -ErrorAction SilentlyContinue)) { throw "GitHub CLI (g
 if ($LASTEXITCODE -ne 0) { throw "GitHub CLI is not authenticated. Run: gh auth login" }
 if (-not (Test-Path $Root)) { New-Item -ItemType Directory -Path $Root | Out-Null }
 
-# --- Load projects file (JSON array of objects: slug, name, desc, private) ----------------------
+# Load projects
 $projects = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 if (-not $projects) { throw "No projects found in $ConfigFile" }
 
-# --- Helper: create minimal, heavily-commented skeleton -----------------------------------------
+# Helper: skeleton writer (README, LICENSE, .gitignore, .gitattributes, src\main.c)
 function New-UmicomSkeleton {
   param([string]$Path, [string]$Name, [string]$Desc)
 
@@ -110,6 +111,30 @@ cmake-build-*/
 '@
   Set-Content -Path .gitignore -Value $gitignore -Encoding UTF8
 
+  # Line ending normalization to avoid CRLF/LF noise across platforms
+  $gitattributes = @'
+*               text=auto
+*.c             text eol=lf
+*.h             text eol=lf
+*.cpp           text eol=lf
+*.hpp           text eol=lf
+*.sh            text eol=lf
+*.ps1           text eol=crlf
+*.md            text eol=lf
+*.json          text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.svg           text eol=lf
+*.ui            text eol=lf
+*.css           text eol=lf
+
+*.png           binary
+*.jpg           binary
+*.ico           binary
+*.pdf           binary
+'@
+  Set-Content -Path .gitattributes -Value $gitattributes -Encoding UTF8
+
   $mainc = @'
 /*
  * File: src/main.c
@@ -128,32 +153,28 @@ int main(void) {
   Pop-Location
 }
 
-# --- Helper: does remote repo exist? ------------------------------------------------------------
+# Helper: remote repo existence
 function Test-RepoExists {
   param([string]$Org, [string]$Slug)
   & gh repo view "$Org/$Slug" --json name 1>$null 2>$null
   return ($LASTEXITCODE -eq 0)
 }
 
-# --- Helper: create remote repo with README (so main exists) ------------------------------------
+# Helper: create remote repo with README so main exists
 function New-RemoteRepo {
   param([string]$Org, [string]$Slug, [string]$Name, [string]$Desc, [bool]$IsPrivate)
 
   $visibility = "--public"
   if ($IsPrivate) { $visibility = "--private" }
 
-  # --add-readme ensures a default branch (main) and a first commit exist immediately.
   & gh repo create "$Org/$Slug" $visibility --description "$Desc" --add-readme
   if ($LASTEXITCODE -ne 0) { throw "Failed to create remote repo: $Org/$Slug" }
 
-  # Optional hardening: disable wiki/projects (issues stay enabled)
   & gh api -X PATCH "repos/$Org/$Slug" -f has_wiki=false -f has_projects=false 1>$null
-
-  # Ensure the default branch is "main" (should already be, but explicit is fine)
   & gh api -X PATCH "repos/$Org/$Slug" -f default_branch=main 1>$null
 }
 
-# --- Plan (informational) -----------------------------------------------------------------------
+# Plan
 $plan = foreach ($p in $projects) {
   $slug = $p.slug; $name = $p.name; $desc = $p.desc
   $isPrivate = [bool]$p.private
@@ -182,7 +203,7 @@ if ($DryRun) {
   exit 0
 }
 
-# --- Execute sync --------------------------------------------------------------------------------
+# Execute
 foreach ($p in $projects) {
   $slug = $p.slug; $name = $p.name; $desc = $p.desc
   $isPrivate = [bool]$p.private
@@ -218,7 +239,6 @@ foreach ($p in $projects) {
   Push-Location $localPath
   if (-not (Test-Path ".git")) { git init | Out-Null; git branch -M main }
 
-  # Ensure we're on main and have upstream set
   $currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null)
   if (-not $currentBranch -or $currentBranch -eq "HEAD") {
     git checkout -B main | Out-Null
@@ -227,7 +247,6 @@ foreach ($p in $projects) {
     if ($LASTEXITCODE -ne 0) { git checkout -B main | Out-Null }
   }
 
-  # If no commits yet, bootstrap and push; else pull latest main
   git rev-parse --verify HEAD 1>$null 2>$null
   $hasCommits = ($LASTEXITCODE -eq 0)
 
@@ -241,7 +260,6 @@ foreach ($p in $projects) {
   } else {
     Write-Host "Repo has commits; pulling latest main (rebase)..." -ForegroundColor DarkGreen
     git pull --rebase origin main 2>$null
-    # If upstream not set (first-time clone fallback), set and push:
     if ($LASTEXITCODE -ne 0) {
       git branch --set-upstream-to=origin/main main 2>$null
       git pull --rebase origin main 2>$null
@@ -252,10 +270,9 @@ foreach ($p in $projects) {
 
 Write-Host "`nSync done. Main-only policy respected." -ForegroundColor Cyan
 
-# --- Optional: one-time auto-commit sweep --------------------------------------------------------
-# Ask if we should scan each repo, stage changes, commit, and push to main.
+# Auto-commit sweep (optional)
 $reply = Read-Host "Run auto-commit sweep now? (y/N)"
-if ($reply -match '^(y|Y)$') {
+if ($reply -match "^(y|Y)$") {
   Write-Host "Auto-commit sweep started..." -ForegroundColor Cyan
 
   foreach ($p in $projects) {
@@ -265,7 +282,6 @@ if ($reply -match '^(y|Y)$') {
 
     Push-Location $localPath
 
-    # Ensure we're on main (create it if missing)
     $currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null)
     if (-not $currentBranch -or $currentBranch -eq "HEAD") {
       git checkout -B main 1>$null 2>$null
@@ -274,13 +290,11 @@ if ($reply -match '^(y|Y)$') {
       if ($LASTEXITCODE -ne 0) { git checkout -B main 1>$null 2>$null }
     }
 
-    # If there's anything to commit, do it with a timestamped message
     $status = git status --porcelain
     if ($status) {
       git add -A
       $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
       git commit -m "chore: autosave ($ts) - main-only policy"
-      # Ensure remote is set; set upstream if first push
       $hasRemote = git remote 2>$null
       if (-not $hasRemote) {
         git remote add origin "https://github.com/$Org/$($p.slug).git"
@@ -303,5 +317,6 @@ if ($reply -match '^(y|Y)$') {
 } else {
   Write-Host "Skipped auto-commit sweep." -ForegroundColor Yellow
 }
-Write-Host "Umicom Repo Sync - finished." -ForegroundColor Cyan
-# --- END OF SCRIPT --------------------------------------------------------------------------------
+
+Write-Host "Umicom Repo Sync - finished."
+# =========================================================================================
