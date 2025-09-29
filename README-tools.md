@@ -1,14 +1,4 @@
-﻿# =============================================================================
-#  Umicom Dev Tools - {FILENAME}
-#  Project: Umicom AuthorEngine AI / Workspace Utilities
-#  Purpose: Keep credits & licensing visible in every file.
-#  
-#  © 2025 Umicom Foundation - License: MIT
-
-#  Credits: Umicom Foundation engineering. 
-#  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
-# =============================================================================
-
+﻿
 # Umicom Dev Tools (improved)
 
 These are drop-in replacements / additions for `C:\dev\umicom-dev\tools`.

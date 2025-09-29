@@ -7,7 +7,7 @@
 #  
 #  © 2025 Umicom Foundation - License: MIT
 
-#  Credits: Umicom Foundation engineering. 
+#   
 #  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
 # =============================================================================
 

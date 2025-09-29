@@ -4,7 +4,7 @@
  Project: Umicom AuthorEngine AI / Workspace Utilities
  Purpose: Keep credits & licensing visible in every file.
  
- Â© {YEAR} Umicom Foundation - License: MIT
+ © {YEAR} Umicom Foundation - License: MIT
  Credits: Umicom Foundation engineering. 
  NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
 =============================================================================
