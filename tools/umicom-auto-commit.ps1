@@ -1,77 +1,117 @@
-﻿<# =================================================================================================
-  Umicom Auto-Commit Watcher
-  Author: Sammy Hegab (Umicom Foundation) â€” with AI co-pilot â€œSarahâ€
-  Licence: MIT
+﻿<# ===============================================================================================
+ Umicom Auto-Commit Watcher (PowerShell)
+ Author: Sammy Hegab (Umicom Foundation)
+ Licence: MIT
 
-  PURPOSE
-  -------
-  â€¢ Watch all project folders listed in projects.json under C:\dev\<slug>.
-  â€¢ On file changes, debounce, then: git add -A ; git commit ; git push origin main.
-  â€¢ Excludes typical build artefacts (build/out/dist/node_modules, etc).
+ PURPOSE
+ - Watch all git repos under a root folder.
+ - On any change (excluding .git), debounce for N seconds, then:
+     * ensure branch "main"
+     * git add -A
+     * git commit "chore: autosave (<timestamp>) - main-only policy"
+     * git push (create upstream if missing)
+ NOTES
+ - Uses FileSystemWatcher + per-repo System.Timers.Timer for debouncing.
+ - Press Ctrl+C to stop.
+ =============================================================================================== #>
 
-  NOTE
-  ----
-  â€¢ This is optional. Use it when you want automatic commits while multitasking.
-  â€¢ Commit messages are timestamped. You can still make handcrafted commits anytime.
-================================================================================================= #>
-
+[CmdletBinding()]
 param(
-  [string]$ConfigFile = "C:\dev\projects.json",
-  [string]$Root       = "C:\dev"
+  [string]$Root = "C:\dev",
+  [int]$CooldownSeconds = 2
 )
 
-$projects = Get-Content $ConfigFile -Raw | ConvertFrom-Json
-if (-not $projects) { throw "No projects found in $ConfigFile" }
-
-# Debounce bucket per repo
-$timers = @{}
-$excluded = @('\build\','\out\','\dist\','\node_modules\','.git\')
+$ErrorActionPreference = "Stop"
 
 function Start-Commit {
-  param([string]$repoPath)
+  param([Parameter(Mandatory=$true)][string]$repoPath)
 
   Push-Location $repoPath
-  # Skip if nothing changed
-  $status = git status --porcelain
-  if (-not $status) { Pop-Location; return }
 
-  git add -A
-  $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-  git commit -m "chore: autosave ($ts) â€” main-only policy"
-  git push origin main
+  # Ensure main
+  $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
+  if (-not $branch -or $branch -eq "HEAD") {
+    git checkout -B main 1>$null 2>$null
+  } elseif ($branch -ne "main") {
+    git checkout main 1>$null 2>$null
+    if ($LASTEXITCODE -ne 0) { git checkout -B main 1>$null 2>$null }
+  }
+
+  # Commit if there are changes
+  $status = git status --porcelain
+  if ($status) {
+    git add -A
+    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    git commit -m "chore: autosave ($ts) - main-only policy" | Out-Null
+
+    # Push (create upstream if needed)
+    git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 1>$null 2>$null
+    if ($LASTEXITCODE -ne 0) {
+      git push -u origin main
+    } else {
+      git push origin main
+    }
+    Write-Host ("Committed and pushed: {0}" -f $repoPath) -ForegroundColor Green
+  }
+
   Pop-Location
 }
 
-foreach ($p in $projects) {
-  $path = Join-Path $Root $p.slug
-  if (-not (Test-Path $path)) { continue }
+# Per-repo debounce timers
+$timers = @{}
 
-  $fsw = New-Object System.IO.FileSystemWatcher
-  $fsw.Path = $path
-  $fsw.IncludeSubdirectories = $true
-  $fsw.EnableRaisingEvents = $true
-  $action = {
-    param($source, $eventArgs, $timers, $excluded, $repoPath)
-    $full = $eventArgs.FullPath
-    foreach ($ex in $excluded) { if ($full -like "*$ex*") { return } }
+function Arm-Timer {
+  param([string]$repoPath, [int]$ms)
 
-    # debounce 2s per repo
-    if ($timers.ContainsKey($repoPath)) { $timers[$repoPath].Stop(); $timers[$repoPath].Dispose() }
-    $t = New-Object Timers.Timer 2000
-    $t.AutoReset = $false
-    $t.add_Elapsed({ Start-Commit -repoPath $repoPath })
-    $timers[$repoPath] = $t
-    $t.Start()
+  if ($timers.ContainsKey($repoPath)) {
+    try { $timers[$repoPath].Stop(); $timers[$repoPath].Dispose() } catch {}
+    $timers.Remove($repoPath) | Out-Null
   }
 
-  Register-ObjectEvent $fsw Changed -Action { $action.Invoke($args[0], $args[1], $timers, $excluded, $path) } | Out-Null
-  Register-ObjectEvent $fsw Created -Action { $action.Invoke($args[0], $args[1], $timers, $excluded, $path) } | Out-Null
-  Register-ObjectEvent $fsw Deleted -Action { $action.Invoke($args[0], $args[1], $timers, $excluded, $path) } | Out-Null
-  Register-ObjectEvent $fsw Renamed -Action { $action.Invoke($args[0], $args[1], $timers, $excluded, $path) } | Out-Null
+  $t = New-Object System.Timers.Timer
+  $t.Interval = $ms
+  $t.AutoReset = $false
+  Register-ObjectEvent -InputObject $t -EventName Elapsed -MessageData $repoPath -Action {
+    Start-Commit -repoPath $Event.MessageData
+  } | Out-Null
+  $t.Start()
+  $timers[$repoPath] = $t
+}
+
+function Watch-Repo {
+  param([string]$path)
+
+  $fsw = New-Object System.IO.FileSystemWatcher $path -Property @{
+    Filter = '*'; IncludeSubdirectories = $true; EnableRaisingEvents = $true
+  }
+
+  $action = {
+    param($src, $e)
+    # Ignore changes inside .git
+    if ($e.FullPath -match '\\\.git(\\|$)') { return }
+    Arm-Timer -repoPath $using:path -ms ($using:CooldownSeconds * 1000)
+  }
+
+  Register-ObjectEvent $fsw Changed -Action $action | Out-Null
+  Register-ObjectEvent $fsw Created -Action $action | Out-Null
+  Register-ObjectEvent $fsw Deleted -Action $action | Out-Null
+  Register-ObjectEvent $fsw Renamed -Action $action | Out-Null
 
   Write-Host "Watching: $path"
 }
 
+# Discover repos
+$repos = Get-ChildItem -Path $Root -Directory | Where-Object { Test-Path (Join-Path $_.FullName ".git") }
+foreach ($r in $repos) { Watch-Repo -path $r.FullName }
+
 Write-Host "`nAuto-commit watcher running. Press Ctrl+C to stop."
-while ($true) { Start-Sleep -Seconds 1 }
-# End of umicom-auto-commit.ps1
+try {
+  while ($true) { Start-Sleep -Seconds 1 }
+} finally {
+  # Cleanup timers + event subscribers
+  foreach ($t in $timers.Values) { try { $t.Stop(); $t.Dispose() } catch {} }
+  Get-EventSubscriber | Where-Object {
+    $_.SourceObject -is [System.IO.FileSystemWatcher] -or $_.SourceObject -is [System.Timers.Timer]
+  } | Unregister-Event -Force
+}
+Write-Host "Watcher stopped."
