@@ -1,182 +1,290 @@
-﻿<#
-=============================================================================
- Umicom Dev Tools - {FILENAME}
- Project: Umicom AuthorEngine AI / Workspace Utilities
- Purpose: Keep credits & licensing visible in every file.
- 
- Â© {YEAR} Umicom Foundation - License: MIT
- Credits: Umicom Foundation engineering. 
- NOTE: Do not remove this credits banner. Keep credits in all scripts/sources.
-=============================================================================
-#>
+﻿<# =====================================================================
+ Umicom Foundation - Standard Credits Header Enforcer
+ Author: Sammy Hegab
+ File: tools/enforce-credits.ps1
 
-<# =======================================================================
- Umicom Tools - Credits Banner Enforcer
- Maintainer: Umicom Foundation
-Author: Sammy Hegab
-  License: MIT
-  WHAT THIS DOES 
- - Scans a tree and inserts a standard credits banner from a template
-   into source files that are missing one.
- - Safe by default (dry-run). Use -Apply to write changes.
- - Compatible with Windows PowerShell 5.x and PowerShell 7+
+ PURPOSE
+   Inserts (or replaces) a standardized ASCII-only credits header at the
+   top of source files. Preserves each file's original encoding and line
+   endings. Positions the header below a shebang (#!) when present.
 
- Usage examples:
-   .\tools\enforce-credits.ps1 -Root C:\dev\umicom-dev -DryRun
-   .\tools\enforce-credits.ps1 -Root C:\dev\umicom-dev -Apply -Verbose
-======================================================================= #>
+ USAGE
+   # Dry-run (no writes)
+   .\tools\enforce-credits.ps1 -Root C:\dev
 
-[CmdletBinding()]
+   # Apply (write changes)
+   .\tools\enforce-credits.ps1 -Root C:\dev -Apply
+
+   # Narrow to extensions or exclude folders/files
+   .\tools\enforce-credits.ps1 -Root C:\dev -Apply `
+     -IncludeExt .ps1,.psm1,.c,.h,.cpp,.hpp,.js,.ts,.py,.sh `
+     -ExcludePath '\.git','\bthird_party\b','\bnode_modules\b'
+
+ NOTES
+   - ASCII-only header to avoid mojibake.
+   - No “Sarah” or co-pilot references included.
+   - Existing headers matching our sentinel lines are replaced.
+   - Skips formats without comments (e.g., JSON) and binary files.
+
+ License: MIT (see LICENSE)
+ Copyright (c) 2025 Umicom Foundation
+ Do not remove this header.
+===================================================================== #>
+
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
   [Parameter(Mandatory=$true)]
   [string]$Root,
 
-  [string]$Template = "$PSScriptRoot\templates\CREDITS-HEADER.txt",
-
-  # Write changes; otherwise just report (dry-run)
   [switch]$Apply,
 
-  # File globs to include
-  [string[]]$Include = @(
-    '*.ps1','*.psm1','*.psd1','*.psd1',
-    '*.c','*.h','*.cpp','*.hpp',
-    '*.cs','*.java','*.go','*.rs','*.php',
-    '*.js','*.ts','*.tsx','*.jsx','*.css','*.scss',
-    '*.py','*.rb','*.sh','*.pl',
-    '*.ini','*.toml','*.yml','*.yaml',
-    '*.sql','*.md','*.xml','*.html'
+  # Which file extensions to consider (default: common source/script/doc types)
+  [string[]]$IncludeExt = @(
+    '.ps1','.psm1','.psd1',
+    '.bat','.cmd',
+    '.sh','.bash',
+    '.py',
+    '.c','.h','.cpp','.hpp','.cc',
+    '.cs','.java','.go','.php',
+    '.js','.ts',
+    '.md','.rst','.yml','.yaml'
   ),
 
-  # Folder names to skip anywhere in the path
-  [string[]]$ExcludeDirs = @(
-    '.git','.github','.vs','.vscode',
-    'bin','obj','build','out','dist','node_modules',
-    'packages','coverage','artifacts','third_party','vendor','external'
+  # Regex fragments to exclude paths (matched against full path, case-insensitive)
+  [string[]]$ExcludePath = @('\.git','\bbin\b','\bobj\b','\bnode_modules\b','\b.vscode\b','\b\.vs\b','\bbuild\b'),
+
+  # Optional: override the default ASCII header lines
+  [string[]]$HeaderLines = @(
+    '=====================================================================',
+    ' Umicom Foundation - Standard Credits Header',
+    ' Project: (set as appropriate)',
+    ' Purpose: (briefly describe this file)',
+    ' License: MIT (see LICENSE)',
+    ' Copyright (c) 2025 Umicom Foundation',
+    ' Author: Sammy Hegab',
+    ' Do not remove this header.',
+    '====================================================================='
   )
 )
 
-# ---- helpers -------------------------------------------------------------
+# ------------------------------
+# Utility: should we skip a file?
+# ------------------------------
+function Should-SkipFile([string]$path, [string[]]$excludeRegexes) {
+  foreach ($rx in $excludeRegexes) {
+    if ($path -imatch $rx) { return $true }
+  }
+  return $false
+}
 
-function Get-NewLine {
-  param([string]$text)
+# -------------------------------------
+# Comment style selection by extension
+# -------------------------------------
+function Get-CommentStyle([string]$ext) {
+  $ext = $ext.ToLowerInvariant()
+  switch ($ext) {
+    # Single-line '#'
+    { $_ -in '.ps1','.psm1','.psd1','.py','.sh','.bash','.yml','.yaml' } {
+      return [pscustomobject]@{ Kind='line'; LinePrefix='# '; BlockOpen=$null; BlockPrefix=$null; BlockClose=$null }
+    }
+    # Batch files
+    { $_ -in '.bat','.cmd' } {
+      return [pscustomobject]@{ Kind='line'; LinePrefix=':: '; BlockOpen=$null; BlockPrefix=$null; BlockClose=$null }
+    }
+    # Block comments /* ... */
+    { $_ -in '.c','.h','.cpp','.hpp','.cc','.cs','.java','.js','.ts','.go','.php' } {
+      return [pscustomobject]@{ Kind='block'; LinePrefix=$null; BlockOpen='/*'; BlockPrefix=' * '; BlockClose=' */' }
+    }
+    # Markdown/HTML-style comment
+    { $_ -in '.md','.rst' } {
+      return [pscustomobject]@{ Kind='block'; LinePrefix=$null; BlockOpen='<!--'; BlockPrefix='  '; BlockClose='-->' }
+    }
+    default {
+      return $null
+    }
+  }
+}
+
+# -------------------------------------------------
+# Build a header string in the requested style
+# -------------------------------------------------
+function Build-Header([pscustomobject]$style, [string[]]$lines, [string]$nl) {
+  if ($style.Kind -eq 'line') {
+    $body = ($lines | ForEach-Object { $style.LinePrefix + $_ }) -join $nl
+    return $body + $nl + $nl
+  } else {
+    $top    = $style.BlockOpen + $nl
+    $middle = ($lines | ForEach-Object { $style.BlockPrefix + $_ }) -join $nl
+    $bot    = $nl + $style.BlockClose + $nl + $nl
+    return $top + $middle + $bot
+  }
+}
+
+# -------------------------------------------------
+# Detect newline style from existing text
+# -------------------------------------------------
+function Detect-Newline([string]$text) {
   if ($text -match "`r`n") { return "`r`n" }
-  if ($text -match "`n")   { return "`n" }
-  return "`r`n"
+  elseif ($text -match "`n") { return "`n" }
+  else { return "`r`n" }
 }
 
-function Get-TemplateText {
-  param([string]$Template)
-  if (-not (Test-Path -LiteralPath $Template)) {
-    throw "Template not found: $Template"
+# -------------------------------------------------
+# Minimal binary / very large file guard
+# -------------------------------------------------
+function Is-ProbablyBinary([byte[]]$bytes) {
+  if ($bytes.Length -eq 0) { return $false }
+  $check = [Math]::Min(4096, $bytes.Length)
+  for ($i=0; $i -lt $check; $i++) {
+    if ($bytes[$i] -eq 0) { return $true } # NUL often indicates binary
   }
-  return (Get-Content -LiteralPath $Template -Raw)
+  return $false
 }
 
-function Wrap-Header {
-  param(
-    [string]$Ext,
-    [string]$Body,
-    [string]$nl
-  )
-  $ext = $Ext.ToLowerInvariant()
-
-  # choose comment style
-  if ($ext -in @('.ps1','.psm1','.psd1')) {
-    return '<#' + $nl + $Body.TrimEnd() + $nl + '#>'
+# -------------------------------------------------
+# Read file preserving encoding + detect BOM/newline
+# -------------------------------------------------
+function Read-File([string]$path) {
+  $bytes = [System.IO.File]::ReadAllBytes($path)
+  $encoding = $null
+  # BOM detection
+  if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    $encoding = New-Object System.Text.UTF8Encoding($true)
+    $text = [System.Text.Encoding]::UTF8.GetString($bytes,3,$bytes.Length-3)
+  } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+    $encoding = [System.Text.Encoding]::Unicode # UTF-16 LE BOM
+    $text = $encoding.GetString($bytes,2,$bytes.Length-2)
+  } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+    $encoding = [System.Text.Encoding]::BigEndianUnicode # UTF-16 BE BOM
+    $text = $encoding.GetString($bytes,2,$bytes.Length-2)
+  } else {
+    # No BOM: assume UTF-8 (no BOM). If the file is actually ANSI, ASCII-only header is still safe.
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    $text = $encoding.GetString($bytes)
   }
-  elseif ($ext -in @('.c','.h','.cpp','.hpp','.cs','.java','.go','.rs','.php','.js','.ts','.tsx','.jsx','.css','.scss','.sql','.xml','.html')) {
-    return '/*' + $nl + $Body.TrimEnd() + $nl + '*/'
-  }
-  else {
-    # default to line comments (e.g. .py, .sh, .yml, .toml, .md)
-    $pref = ($Body -split "`r?`n") | ForEach-Object { '# ' + $_ }
-    return ($pref -join $nl)
+  $nl = Detect-Newline $text
+  return [pscustomobject]@{
+    Text=$text; Encoding=$encoding; Newline=$nl; HasBOM=($encoding.Preamble.Length -gt 0)
   }
 }
 
-function First-NonEmptyLine {
-  param([string]$text)
-  foreach ($line in ($text -split "`r?`n")) {
-    $t = $line.Trim()
-    if ($t.Length -gt 0) { return $t }
+# -------------------------------------------------
+# Write file using same encoding & BOM
+# -------------------------------------------------
+function Write-File([string]$path, [string]$text, $encoding) {
+  $preamble = $encoding.Preamble
+  $body = $encoding.GetBytes($text)
+  if ($preamble -and $preamble.Length -gt 0) {
+    $out = New-Object byte[] ($preamble.Length + $body.Length)
+    [Array]::Copy($preamble, 0, $out, 0, $preamble.Length)
+    [Array]::Copy($body, 0, $out, $preamble.Length, $body.Length)
+  } else {
+    $out = $body
   }
-  return ""
+  [System.IO.File]::WriteAllBytes($path, $out)
 }
 
-function Has-Header {
-  param(
-    [string]$FileText,
-    [string]$Signature
-  )
-  $head = if ($FileText.Length -gt 4000) { $FileText.Substring(0,4000) } else { $FileText }
-  return ($head.ToLowerInvariant().Contains($Signature.ToLowerInvariant()))
-}
-
-function Find-InsertionIndex {
-  param([string]$text)
-  # keep shebangs or XML prolog on first line
-  if ($text -match '^(#!.*?)(\r?\n)')     { return $Matches[0].Length }
-  if ($text -match '^(<\?xml.*?\?>)(\r?\n)') { return $Matches[0].Length }
+# -------------------------------------------------
+# Find insert position (after shebang if present)
+# -------------------------------------------------
+function Find-InsertIndex([string]$text) {
+  if ($text -match '^(#!.*?)(\r?\n)') {
+    return ($matches[0]).Length
+  }
   return 0
 }
 
-# ---- gather files --------------------------------------------------------
+# -------------------------------------------------
+# Does the file already have our header near the top?
+# Also: find/replace a previously inserted (possibly garbled) header.
+# We look within the first ~80 lines for BOTH sentinel strings.
+# -------------------------------------------------
+function Remove-ExistingHeader([string]$text, [string]$nl) {
+  $maxScan = 80
+  $lines = $text -split "`r?`n"
+  $scanTo = [Math]::Min($maxScan, $lines.Count)
+  $slice = $lines[0..([Math]::Max(0,$scanTo-1))] -join $nl
 
-if (-not (Test-Path -LiteralPath $Root)) { throw "Root not found: $Root" }
-$tpl      = Get-TemplateText -Template $Template
-$signature = First-NonEmptyLine -text $tpl
+  $hasSentinel1 = ($slice -match 'Umicom Foundation - Standard Credits Header')
+  $hasSentinel2 = ($slice -match '\. Do not remove this header\.')
 
-# Build file list respecting Include globs
-$files = @()
-foreach ($pattern in $Include) {
-  $files += Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue
+  if ($hasSentinel1 -and $hasSentinel2) {
+    # Remove from the first occurrence of our block opener line to the end of the block.
+    # We support any of the three styles: line '#', C-style, or HTML.
+    $patterns = @(
+      '(?s)^(?:#\s*)?=+[\s\S]*?Author: Sammy Hegab remove this header\.[\s\S]*?(?:\r?\n){2}',
+      '(?s)^/\*[\s\S]*?Author: Sammy Hegab remove this header\.[\s\S]*?\*/(?:\r?\n){1,2}',
+      '(?s)^<!--[\s\S]*?Author: Sammy Hegab remove this header\.[\s\S]*?-->(?:\r?\n){1,2}'
+    )
+    foreach ($rx in $patterns) {
+      $newText = [System.Text.RegularExpressions.Regex]::Replace($text, $rx, '', 'IgnoreCase, Multiline')
+      if ($newText -ne $text) { return $newText }
+    }
+  }
+  return $text
 }
-# Remove excluded directories
-$exRegex = [regex]::Escape(($ExcludeDirs -join '|')) -replace '\\\|','|'
-$files = $files | Where-Object { $_.DirectoryName -notmatch "(^|\\)($exRegex)(\\|$)" }
 
-$added = 0
+# ----------------
+# Main walk
+# ----------------
+$rootFull = (Resolve-Path $Root).ProviderPath
+$all = Get-ChildItem -LiteralPath $rootFull -Recurse -File -ErrorAction SilentlyContinue
+
+$changed = 0
 $skipped = 0
 
-foreach ($f in $files) {
-  $path = $f.FullName
-  $text = Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue
-  if ($null -eq $text) { Write-Verbose "Skip (unreadable): $path"; $skipped++; continue }
+foreach ($f in $all) {
+  try {
+    $ext = [System.IO.Path]::GetExtension($f.Name)
+    if (-not ($IncludeExt -contains $ext)) { $skipped++; continue }
 
-  if (Has-Header -FileText $text -Signature $signature) {
-    Write-Verbose "OK (has header): $path"
+    $full = $f.FullName
+    if (Should-SkipFile $full $ExcludePath) { $skipped++; continue }
+
+    # quick binary guard
+    $probe = [System.IO.File]::ReadAllBytes($full)
+    if (Is-ProbablyBinary $probe) { $skipped++; continue }
+
+    $style = Get-CommentStyle $ext
+    if (-not $style) { $skipped++; continue }
+
+    $file = Read-File $full
+    $text = $file.Text
+    $nl   = $file.Newline
+
+    # Replace a previously inserted header (even if garbled)
+    $text = Remove-ExistingHeader $text $nl
+
+    # Check if a header already exists by sentinel (after removal attempt, it shouldn’t)
+    $headCheck = ($text -split "`r?`n")[0..([Math]::Min(20,($text -split "`r?`n").Count-1))] -join $nl
+    if ($headCheck -match 'Umicom Foundation - Standard Credits Header') {
+      $skipped++; continue
+    }
+
+    $header = Build-Header $style $HeaderLines $nl
+    $insertAt = Find-InsertIndex $text
+
+    $newText = $text.Insert($insertAt, $header)
+
+    if ($PSCmdlet.ShouldProcess($full, "Insert/replace credits header")) {
+      if ($Apply) {
+        Write-File -path $full -text $newText -encoding $file.Encoding
+        Write-Host "[ADD] $full"
+      } else {
+        Write-Host "[WOULD ADD] $full"
+      }
+      $changed++
+    }
+  }
+  catch {
+    Write-Warning "Skipped (error): $($f.FullName) -> $($_.Exception.Message)"
     $skipped++
-    continue
   }
-
-  $nl        = Get-NewLine -text $text
-  $wrapped   = Wrap-Header -Ext $f.Extension -Body $tpl -nl $nl
-  $insertion = Find-InsertionIndex -text $text
-
-  # cross-version friendly (no ternary operators)
-  if ($text.Length -gt 0) {
-    $prefix = ""
-    if ($insertion -gt 0) { $prefix = $nl }
-    $before = if ($insertion -gt 0) { $text.Substring(0,$insertion) } else { "" }
-    $after  = $text.Substring($insertion)
-    $newText = $before + $prefix + $wrapped + $nl + $nl + $after
-  } else {
-    $newText = $wrapped + $nl + $nl
-  }
-
-  if ($Apply) {
-    # Write UTF-8 without BOM (PS7 default) - consistent and friendly for Git
-    Set-Content -LiteralPath $path -Value $newText -NoNewline -Encoding utf8
-    Write-Host "[ADD] $path"
-  } else {
-    Write-Host "[WOULD ADD] $path"
-  }
-  $added++
 }
 
-Write-Host ""
 if ($Apply) {
-  Write-Host "Inserted header into $added file(s). Skipped $skipped file(s)."
+  Write-Host "Inserted header into $changed file(s). Skipped $skipped file(s)." -ForegroundColor Green
 } else {
-  Write-Host "Dry-run: would insert header into $added file(s). Skipped $skipped file(s). Use -Apply to write."
+  Write-Host "Dry-run complete. Would insert header into $changed file(s). Skipped $skipped file(s). Use -Apply to write." -ForegroundColor Yellow
 }
+# End of script
